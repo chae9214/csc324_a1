@@ -124,6 +124,7 @@ Read through the starter code carefully. In particular, look for:
   This should be the main starting point of your work! Currently,
   it just outputs the semantically meaningful lines in the file.
 |#
+;yaaay!
 (define (evaluate body)
   ; TODO: Change this part!
   body)
