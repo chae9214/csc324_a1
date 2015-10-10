@@ -124,7 +124,81 @@ Read through the starter code carefully. In particular, look for:
   This should be the main starting point of your work! Currently,
   it just outputs the semantically meaningful lines in the file.
 |#
-;yaaay!
+
 (define (evaluate body)
-  ; TODO: Change this part!
-  body)
+  (if (equal? personae (first body))
+      (interpret-personae-list (show-personae body))
+      (void)))
+
+#|
+(showPersonae body)
+  body: a list of lines corresponding to the semantically meaningful text
+  of a FunShake file.
+
+  Returns a list of strings that compose the Personae section of the file
+|#
+(define (show-personae body)
+  (if (equal? finis (first body))
+      '()
+      (if (equal? personae (first body))
+          (show-personae (rest body))
+          (cons (first body) (show-personae (rest body))))))
+
+#|
+(interpretPersonaeList body)
+  body: The list of strings that compose the Personae section of the file
+
+  Returns a list of the characters and their values
+|#
+(define (interpret-personae-list body)
+  (if (empty? body)
+      '()
+      (cons (interpret-personae (first (string-split (first body))) (rest (string-split (first body))))
+            (interpret-personae-list(rest body)))))
+  
+  
+(define (interpret-personae name description)
+  (define truename (string-trim name ","))
+  (list truename (get-description-value description)))
+
+(define (get-description-value description)
+  (if (equal? (count-negatives description) 0)
+      (length description)
+      (* (length description) (* -1 (expt 2 (count-negatives description))))))
+
+(define (count-negatives description)
+  (if (empty? description)
+      0
+      (if (is-bad (first description) bad-words)
+          (+ 1 (count-negatives (rest description)))
+          (count-negatives (rest description)))))
+
+(define (is-bad word lst-bad)
+  (if (empty? lst-bad)
+      #f
+      (if (equal? (first lst-bad) word)
+          #t
+          (is-bad word (rest lst-bad)))))
+
+
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
