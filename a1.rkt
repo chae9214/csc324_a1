@@ -126,24 +126,27 @@ Read through the starter code carefully. In particular, look for:
 |#
 
 (define (evaluate body)
-  (if (equal? personae (first body))
-      (interpretPersonaeList (showPersonae body))
-      (void)))
+  (if (empty? body)
+      (void)
+      (cond [(equal? personae (first body))
+             (interpret-personae-list (show-personae body))]
+            [else (evaluate (rest body))])))
 
-(define (showPersonae body)
+(define (show-personae body)
   (if (equal? finis (first body))
       '()
       (if (equal? personae (first body))
-          (showPersonae (rest body))
-          (cons (first body) (showPersonae (rest body))))))
+          (show-personae (rest body))
+          (cons (first body) (show-personae (rest body))))))
 
-(define (interpretPersonaeList body)
+(define (interpret-personae-list body)
   (if (empty? body)
       '()
-      (cons (interpretPersonae (first (string-split (first body))) (rest (string-split (first body))))
-            (interpretPersonaeList(rest body)))))
+      (cons (interpret-personae (first (string-split (first body))) (rest (string-split (first body))))
+            (interpret-personae-list(rest body)))))
   
-  
-(define (interpretPersonae name description)
+(define (interpret-personae name description)
   (define truename (string-trim name ","))
   (list truename description))
+
+
