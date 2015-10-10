@@ -147,6 +147,24 @@ Read through the starter code carefully. In particular, look for:
   
 (define (interpret-personae name description)
   (define truename (string-trim name ","))
-  (list truename description))
+  (list truename (get-description-value description)))
 
+(define (get-description-value description)
+  (if (equal? (count-negatives description) 0)
+      (length description)
+      (* (length description) (* -1 (expt 2 (count-negatives description))))))
+
+(define (count-negatives description)
+  (if (empty? description)
+      0
+      (if (is-bad (first description) bad-words)
+          (+ 1 (count-negatives (rest description)))
+          (count-negatives (rest description)))))
+
+(define (is-bad word lst-bad)
+  (if (empty? lst-bad)
+      #f
+      (if (equal? (first lst-bad) word)
+          #t
+          (is-bad word (rest lst-bad)))))
 
