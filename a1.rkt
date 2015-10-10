@@ -124,7 +124,26 @@ Read through the starter code carefully. In particular, look for:
   This should be the main starting point of your work! Currently,
   it just outputs the semantically meaningful lines in the file.
 |#
-;yaaay!2
+
 (define (evaluate body)
-  ; TODO: Change this part!
-  body)
+  (if (equal? personae (first body))
+      (interpretPersonaeList (showPersonae body))
+      (void)))
+
+(define (showPersonae body)
+  (if (equal? finis (first body))
+      '()
+      (if (equal? personae (first body))
+          (showPersonae (rest body))
+          (cons (first body) (showPersonae (rest body))))))
+
+(define (interpretPersonaeList body)
+  (if (empty? body)
+      '()
+      (cons (interpretPersonae (first (string-split (first body))) (rest (string-split (first body))))
+            (interpretPersonaeList(rest body)))))
+  
+  
+(define (interpretPersonae name description)
+  (define truename (string-trim name ","))
+  (list truename description))
