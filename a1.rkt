@@ -115,6 +115,54 @@ Read through the starter code carefully. In particular, look for:
 ; Main evaluation (YOUR WORK GOES HERE)
 ;------------------------------------------------------------------------------
 
+; (helper) search1 is used in split-body
+(define (search1 item lst)
+  (let search-ind ([lst lst]
+                   [ind 0])
+    (cond [(empty? lst) #f]
+          [(equal? item (first lst)) ind]
+          [else (search-ind (rest lst) (+ 1 ind))])))
+
+; (helper) search2 is used in check-expr (one level deeper than search1)
+(define (search2 item lst)
+  (let search-ind ([lst lst]
+                   [ind 0])
+    (cond [(empty? lst) #f]
+          [(equal? item (first (first lst))) ind]
+          [else (search-ind (rest lst) (+ 1 ind))])))
+
+; (helper) split-body is used in evaluate
+(define (split-body body)
+  (define i (search1 finis body))
+  (if (equal? i #f)
+        (cons body '())
+        (cons (take body i) (split-body (drop body (+ i 1))))))
+
+; Does the same thing as search1 and split-body combined
+;(define (split-body body)
+;  (foldr (lambda (item lst)
+;           (if (equal? item finis)
+;               (cons '() lst)
+;               (cons (cons item (first lst)) (rest lst))))
+;         (list '()) body))
+
+; (helper) sublist is used in make-splitter
+(define (sublist sub lst)
+  (let sublist-ind ((lst lst)
+                    (ind 0))
+    (cond [(empty? lst) #f]
+          [(> (length sub) (length lst)) #f]
+          [(equal? (take lst (length sub)) sub) ind]
+          [else (sublist-ind (rest lst) (+ 1 ind))])))
+
+; (helper) make-splitter is used in interpret-expr
+(define (make-splitter splitter)
+  (lambda (s)
+    (letrec ([lst (string-split s)]
+             [sub (string-split splitter)]
+             [i (sublist sub lst)])
+      (if (equal? i #f) #f (list (take lst i) (drop lst (+ i (length sub))))))))
+
 #|
 (evaluate body)
   body: a list of lines corresponding to the semantically meaningful text
@@ -124,81 +172,75 @@ Read through the starter code carefully. In particular, look for:
   This should be the main starting point of your work! Currently,
   it just outputs the semantically meaningful lines in the file.
 |#
-
 (define (evaluate body)
-  (if (equal? personae (first body))
-      (interpret-personae-list (show-personae body))
-      (void)))
+  (letrec ([body-lst (split-body body)]
+           [personae-lst (rest (first body-lst))]
+           [settings-lst (rest (first (rest body-lst)))]
+           [dialogue-lst (last body-lst)])
+    (if (equal? (length body-lst) 3)
+        (set! settings-lst (rest (second body-lst))) (void))
+    (define plst (interpret-personae-lst personae-lst))
+    ;(define slst (interpret-settings-lst settings-lst)) TODO
+    (interpret-dialogue-lst dialogue-lst plst)))
+    ;(write personae-lst)
+    ;(write settings-lst)
+    ;(write dialogue-lst)))
 
-#|
-(showPersonae body)
-  body: a list of lines corresponding to the semantically meaningful text
-  of a FunShake file.
+; Changed to take just the description for repeated use in multiple functions
+(define (interpret-desc desc)
+  (letrec ([num-word (length desc)]
+           [num-bad
+            (length (filter (lambda (x) (not (equal? (member x bad-words) #f))) desc))]
+           [value (* (* (expt 2 num-bad) num-word) -1)])
+    (if (equal? num-bad 0) num-word value)))
 
-  Returns a list of strings that compose the Personae section of the file
-|#
-(define (show-personae body)
-  (if (equal? finis (first body))
+; Checks for self-reference, name-lookup or neither in an expression
+(define (check-expr expr name plst)
+  (if (equal? (length expr) 1)
+      (cond [(not (equal? (member (first expr) self-refs) #f))
+             (last (list-ref plst (search2 name plst)))]
+            [(not (equal? (member (first expr) (flatten plst)) #f))
+             (last (list-ref plst (search2 (first expr) plst)))]
+            [else (interpret-desc expr)])
+      (interpret-desc expr)))
+
+; Uses check-expr which uses interpret-desc
+; NOTE while interpret-desc takes list of whitespace-splitted strings,
+;      interpret-expr takes a not-yet-splitted string (for make-splitter)
+(define (interpret-expr expr name plst)
+  (let ([add-split (make-splitter add)]
+        [mult-split (make-splitter mult)])
+    (cond [(not (equal? (add-split expr) #f))
+           (+ (check-expr (first (add-split expr)) name plst)
+              (check-expr (last (add-split expr)) name plst))]
+          [(not (equal? (mult-split expr) #f))
+           (* (check-expr (first (mult-split expr)) name plst)
+              (check-expr (last (mult-split expr)) name plst))]
+          [else (check-expr (string-split expr) name plst)])))
+
+(define (interpret-personae-lst lst)
+  (if (empty? lst)
       '()
-      (if (equal? personae (first body))
-          (show-personae (rest body))
-          (cons (first body) (show-personae (rest body))))))
+      (let ([s (string-split (first lst))])
+        (cons (list (string-trim (first s) ",") (interpret-desc (rest s)))
+              (interpret-personae-lst (rest lst))))))
 
-#|
-(interpretPersonaeList body)
-  body: The list of strings that compose the Personae section of the file
-
-  Returns a list of the characters and their values
-|#
-(define (interpret-personae-list body)
-  (if (empty? body)
+(define (interpret-dialogue-lst lst plst)
+  (if (empty? lst)
       '()
-      (cons (interpret-personae (first (string-split (first body))) (rest (string-split (first body))))
-            (interpret-personae-list(rest body)))))
-  
-  
-(define (interpret-personae name description)
-  (define truename (string-trim name ","))
-  (list truename (get-description-value description)))
+      (let ([name (string-trim (first lst) ":")])
+        (cons (list name (interpret-expr (second lst) name plst))
+              (interpret-dialogue-lst (drop lst 2) plst)))))
 
-(define (get-description-value description)
-  (if (equal? (count-negatives description) 0)
-      (length description)
-      (* (length description) (* -1 (expt 2 (count-negatives description))))))
+; TODO
+(define (interpret-settings-lst lst flst)
+  (if (empty? lst)
+      '()
+      (cons (interpret-settings (first (string-split (first lst))) (rest (string-split (first lst))) flst)
+            (interpret-settings-lst (rest lst) (cons flst (interpret-settings (first (string-split (first lst)))
+                                                                              (rest (string-split (first lst)))))))))
 
-(define (count-negatives description)
-  (if (empty? description)
-      0
-      (if (is-bad (first description) bad-words)
-          (+ 1 (count-negatives (rest description)))
-          (count-negatives (rest description)))))
-
-(define (is-bad word lst-bad)
-  (if (empty? lst-bad)
-      #f
-      (if (equal? (first lst-bad) word)
-          #t
-          (is-bad word (rest lst-bad)))))
-
-
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+(define (interpret-settings name expression flst)
+  (if (equal? (last (string->list name)) #\,)
+      (cons (string-trim name ",") (interpret-expr expression param '()) flst)
+      '()))
