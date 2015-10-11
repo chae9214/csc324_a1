@@ -115,58 +115,36 @@ Read through the starter code carefully. In particular, look for:
 ; Main evaluation (YOUR WORK GOES HERE)
 ;------------------------------------------------------------------------------
 
-; (helper) search is used in split-body
-(define (search item lst)
+; (helper) search1 is used in split-body
+(define (search1 item lst)
   (let search-ind ([lst lst]
                    [ind 0])
     (cond [(empty? lst) #f]
           [(equal? item (first lst)) ind]
           [else (search-ind (rest lst) (+ 1 ind))])))
 
+; (helper) search2 is used in check-expr (one level deeper than search1)
+(define (search2 item lst)
+  (let search-ind ([lst lst]
+                   [ind 0])
+    (cond [(empty? lst) #f]
+          [(equal? item (first (first lst))) ind]
+          [else (search-ind (rest lst) (+ 1 ind))])))
+
 ; (helper) split-body is used in evaluate
 (define (split-body body)
-  (define i (search finis body))
+  (define i (search1 finis body))
   (if (equal? i #f)
         (cons body '())
         (cons (take body i) (split-body (drop body (+ i 1))))))
 
-; Does the same thing as above two functions combined
+; Does the same thing as search1 and split-body combined
 ;(define (split-body body)
 ;  (foldr (lambda (item lst)
 ;           (if (equal? item finis)
 ;               (cons '() lst)
 ;               (cons (cons item (first lst)) (rest lst))))
 ;         (list '()) body))
-
-#|
-(evaluate body)
-  body: a list of lines corresponding to the semantically meaningful text
-  of a FunShake file.
-
-  Returns a list of numbers produced when evaluating the FunShake file.
-  This should be the main starting point of your work! Currently,
-  it just outputs the semantically meaningful lines in the file.
-|#
-(define (evaluate body)
-  (letrec ([body-lst (split-body body)]
-           [personae-lst (rest (first body-lst))]
-           [settings-lst '()]
-           [dialogue-lst (last body-lst)])
-    (if (equal? (length body-lst) 3)
-        (set! settings-lst (rest (second body-lst))) (void))
-    (interpret-personae-lst personae-lst)
-    (interpret-dialogue-lst dialogue-lst)))
-    ;(write personae-lst)
-    ;(write settings-lst)
-    ;(write dialogue-lst)))
-
-; Changed to take just the description for repeated use in multiple functions
-(define (interpret-desc desc)
-  (letrec ([num-word (length desc)]
-           [num-bad
-            (length (filter (lambda (x) (not (equal? (member x bad-words) #f))) desc))]
-           [value (* (* (expt 2 num-bad) num-word) -1)])
-    (if (equal? num-bad 0) num-word value)))
 
 ; (helper) sublist is used in make-splitter
 (define (sublist sub lst)
@@ -185,20 +163,60 @@ Read through the starter code carefully. In particular, look for:
              [i (sublist sub lst)])
       (if (equal? i #f) #f (list (take lst i) (drop lst (+ i (length sub))))))))
 
-; interpret-expr uses interpret-desc
+#|
+(evaluate body)
+  body: a list of lines corresponding to the semantically meaningful text
+  of a FunShake file.
+
+  Returns a list of numbers produced when evaluating the FunShake file.
+  This should be the main starting point of your work! Currently,
+  it just outputs the semantically meaningful lines in the file.
+|#
+(define (evaluate body)
+  (letrec ([body-lst (split-body body)]
+           [personae-lst (rest (first body-lst))]
+           [settings-lst '()]
+           [dialogue-lst (last body-lst)])
+    (if (equal? (length body-lst) 3)
+        (set! settings-lst (rest (second body-lst))) (void))
+    (define plst (interpret-personae-lst personae-lst))
+    ;(define slst (interpret-settings-lst settings-lst)) TODO
+    (interpret-dialogue-lst dialogue-lst plst)))
+    ;(write personae-lst)
+    ;(write settings-lst)
+    ;(write dialogue-lst)))
+
+; Changed to take just the description for repeated use in multiple functions
+(define (interpret-desc desc)
+  (letrec ([num-word (length desc)]
+           [num-bad
+            (length (filter (lambda (x) (not (equal? (member x bad-words) #f))) desc))]
+           [value (* (* (expt 2 num-bad) num-word) -1)])
+    (if (equal? num-bad 0) num-word value)))
+
+; Checks for self-reference, name-lookup or neither in an expression
+(define (check-expr expr name plst)
+  (if (equal? (length expr) 1)
+      (cond [(not (equal? (member (first expr) self-refs) #f))
+             (last (list-ref plst (search2 name plst)))]
+            [(not (equal? (member (first expr) (flatten plst)) #f))
+             (last (list-ref plst (search2 (first expr) plst)))]
+            [else (interpret-desc expr)])
+      (interpret-desc expr)))
+
+; Uses check-expr which uses interpret-desc
 ; NOTE while interpret-desc takes list of whitespace-splitted strings,
 ;      interpret-expr takes a not-yet-splitted string (for make-splitter)
-; TODO add self-referece
-(define (interpret-expr expr)
+(define (interpret-expr expr name plst)
   (let ([add-split (make-splitter add)]
         [mult-split (make-splitter mult)])
     (cond [(not (equal? (add-split expr) #f))
-           (+ (interpret-desc (first (add-split expr)))
-              (interpret-desc (last (add-split expr))))]
+           (+ (check-expr (first (add-split expr)) name plst)
+              (check-expr (last (add-split expr)) name plst))]
           [(not (equal? (mult-split expr) #f))
-           (* (interpret-desc (first (mult-split expr)))
-              (interpret-desc (last (mult-split expr))))]
-          [else (interpret-desc (string-split expr))])))
+           (* (check-expr (first (mult-split expr)) name plst)
+              (check-expr (last (mult-split expr)) name plst))]
+          [else (check-expr (string-split expr) name plst)])))
 
 (define (interpret-personae-lst lst)
   (if (empty? lst)
@@ -207,10 +225,13 @@ Read through the starter code carefully. In particular, look for:
         (cons (list (string-trim (first s) ",") (interpret-desc (rest s)))
               (interpret-personae-lst (rest lst))))))
 
-(define (interpret-dialogue-lst lst)
+(define (interpret-dialogue-lst lst plst)
   (if (empty? lst)
       '()
-      (cons (list (string-trim (first lst) ":") (interpret-expr (second lst)))
-            (interpret-dialogue-lst (drop lst 2)))))
+      (let ([name (string-trim (first lst) ":")])
+        (cons (list name (interpret-expr (second lst) name plst))
+              (interpret-dialogue-lst (drop lst 2) plst)))))
 
-
+; TODO
+(define (interpret-settings-lst lst)
+  (void))
