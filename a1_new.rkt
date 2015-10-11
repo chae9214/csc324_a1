@@ -226,8 +226,16 @@ Read through the starter code carefully. In particular, look for:
               (interpret-personae-lst (rest lst))))))
 
 (define (interpret-settings-lst lst flst)
-  ; make use of (interpret-expr expr param '() flst)
-  (void))
+  (if (empty? lst)
+      '()
+      (cons (interpret-settings (first (string-split (first lst))) (rest (string-split (first lst))) flst)
+            (interpret-settings-lst (rest lst) (cons flst (interpret-settings (first (string-split (first lst)))
+                                                                              (rest (string-split (first lst)))))))))
+
+(define (interpret-settings name expression flst)
+  (if (equal? (last (string->list name)) #\,)
+      (cons (string-trim name ",") (interpret-expr expression param '()) flst)
+      '()))
 
 (define (interpret-dialogue-lst lst plst flst)
   (if (empty? lst)
