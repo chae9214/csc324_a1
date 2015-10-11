@@ -180,8 +180,8 @@ Read through the starter code carefully. In particular, look for:
     (if (equal? (length body-lst) 3)
         (set! settings-lst (rest (second body-lst))) (void))
     (define plst (interpret-personae-lst personae-lst))
-    ;(define slst (interpret-settings-lst settings-lst)) TODO
-    (interpret-dialogue-lst dialogue-lst plst)))
+    (define flst (interpret-settings-lst settings-lst '()))
+    (interpret-dialogue-lst dialogue-lst plst flst)))
     ;(write personae-lst)
     ;(write settings-lst)
     ;(write dialogue-lst)))
@@ -195,7 +195,7 @@ Read through the starter code carefully. In particular, look for:
     (if (equal? num-bad 0) num-word value)))
 
 ; Checks for self-reference, name-lookup or neither in an expression
-(define (check-expr expr name plst)
+(define (check-expr expr name plst flst)
   (if (equal? (length expr) 1)
       (cond [(not (equal? (member (first expr) self-refs) #f))
              (last (list-ref plst (search2 name plst)))]
@@ -207,16 +207,16 @@ Read through the starter code carefully. In particular, look for:
 ; Uses check-expr which uses interpret-desc
 ; NOTE while interpret-desc takes list of whitespace-splitted strings,
 ;      interpret-expr takes a not-yet-splitted string (for make-splitter)
-(define (interpret-expr expr name plst)
+(define (interpret-expr expr name plst flst)
   (let ([add-split (make-splitter add)]
         [mult-split (make-splitter mult)])
     (cond [(not (equal? (add-split expr) #f))
-           (+ (check-expr (first (add-split expr)) name plst)
-              (check-expr (last (add-split expr)) name plst))]
+           (+ (check-expr (first (add-split expr)) name plst flst)
+              (check-expr (last (add-split expr)) name plst flst))]
           [(not (equal? (mult-split expr) #f))
-           (* (check-expr (first (mult-split expr)) name plst)
-              (check-expr (last (mult-split expr)) name plst))]
-          [else (check-expr (string-split expr) name plst)])))
+           (* (check-expr (first (mult-split expr)) name plst flst)
+              (check-expr (last (mult-split expr)) name plst flst))]
+          [else (check-expr (string-split expr) name plst flst)])))
 
 (define (interpret-personae-lst lst)
   (if (empty? lst)
@@ -225,13 +225,14 @@ Read through the starter code carefully. In particular, look for:
         (cons (list (string-trim (first s) ",") (interpret-desc (rest s)))
               (interpret-personae-lst (rest lst))))))
 
-(define (interpret-dialogue-lst lst plst)
+(define (interpret-settings-lst lst flst)
+  ; make use of (interpret-expr expr param '() flst)
+  (void))
+
+(define (interpret-dialogue-lst lst plst flst)
   (if (empty? lst)
       '()
       (let ([name (string-trim (first lst) ":")])
-        (cons (list name (interpret-expr (second lst) name plst))
-              (interpret-dialogue-lst (drop lst 2) plst)))))
+        (cons (list name (interpret-expr (second lst) name plst flst))
+              (interpret-dialogue-lst (drop lst 2) plst flst)))))
 
-; TODO
-(define (interpret-settings-lst lst)
-  (void))
