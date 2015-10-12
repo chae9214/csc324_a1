@@ -115,6 +115,45 @@ Read through the starter code carefully. In particular, look for:
 ; Main evaluation (YOUR WORK GOES HERE)
 ;------------------------------------------------------------------------------
 
+; (helper) search1 is used in split-body
+(define (search1 item lst)
+  (let search-ind ([lst lst]
+                   [ind 0])
+    (cond [(empty? lst) #f]
+          [(equal? item (first lst)) ind]
+          [else (search-ind (rest lst) (+ 1 ind))])))
+
+; (helper) search2 is used in check-expr (one level deeper than search1)
+(define (search2 item lst)
+  (let search-ind ([lst lst]
+                   [ind 0])
+    (cond [(empty? lst) #f]
+          [(equal? item (first (first lst))) ind]
+          [else (search-ind (rest lst) (+ 1 ind))])))
+
+; (helper) split-body is used in evaluate
+(define (split-body body)
+  (define i (search1 finis body))
+  (if (equal? i #f)
+        (cons body '())
+        (cons (take body i) (split-body (drop body (+ i 1))))))
+
+; (helper) sublist is used in make-splitter
+(define (sublist sub lst)
+  (let sublist-ind ((lst lst)
+                    (ind 0))
+    (cond [(empty? lst) #f]
+          [(> (length sub) (length lst)) #f]
+          [(equal? (take lst (length sub)) sub) ind]
+          [else (sublist-ind (rest lst) (+ 1 ind))])))
+
+; (helper) make-splitter is used in interpret-expr
+(define (make-splitter splitter)
+  (lambda (lst)
+    (letrec ([sub (string-split splitter)]
+             [i (sublist sub lst)])
+      (if (equal? i #f) #f (list (take lst i) (drop lst (+ i (length sub))))))))
+
 #|
 (evaluate body)
   body: a list of lines corresponding to the semantically meaningful text
@@ -124,47 +163,103 @@ Read through the starter code carefully. In particular, look for:
   This should be the main starting point of your work! Currently,
   it just outputs the semantically meaningful lines in the file.
 |#
-
 (define (evaluate body)
-  (if (empty? body)
-      (void)
-      (cond [(equal? personae (first body))
-             (interpret-personae-list (show-personae body))]
-            [else (evaluate (rest body))])))
+  (letrec ([body-lst (split-body body)]
+           [personae-lst (rest (first body-lst))]
+           [settings-lst '()]
+           [dialogue-lst (last body-lst)])
+    (if (equal? (length body-lst) 3)
+        (set! settings-lst (rest (second body-lst))) (void))
+    (define plst (interpret-personae-lst personae-lst))
+    (define flst (interpret-settings-lst settings-lst))
+    (define dlst (interpret-dialogue-lst dialogue-lst plst flst))
+    (map (lambda (item) (last item)) dlst)))
 
-(define (show-personae body)
-  (if (equal? finis (first body))
+(define (interpret-personae-lst lst)
+  (if (empty? lst)
       '()
-      (if (equal? personae (first body))
-          (show-personae (rest body))
-          (cons (first body) (show-personae (rest body))))))
+      (let ([s (string-split (first lst))])
+        (cons (list (string-trim (first s) ",") (interpret-desc (rest s)))
+              (interpret-personae-lst (rest lst))))))
 
-(define (interpret-personae-list body)
-  (if (empty? body)
+(define (interpret-settings-lst lst)
+  (if (empty? lst)
       '()
-      (cons (interpret-personae (first (string-split (first body))) (rest (string-split (first body))))
-            (interpret-personae-list(rest body)))))
-  
-(define (interpret-personae name description)
-  (define truename (string-trim name ","))
-  (list truename (get-description-value description)))
+      (let ([s (string-split (first lst))])
+        (cons (list (string-trim (first s) ",") (interpret-func (rest s)))
+              (interpret-settings-lst (rest lst))))))
 
-(define (get-description-value description)
-  (if (equal? (count-negatives description) 0)
-      (length description)
-      (* (length description) (* -1 (expt 2 (count-negatives description))))))
+(define (interpret-dialogue-lst lst plst flst)
+  (if (empty? lst)
+      '()
+      (let ([name (string-trim (first lst) ":")])
+        (cons (list name (interpret-expr (string-split (second lst)) name plst flst))
+              (interpret-dialogue-lst (drop lst 2) plst flst)))))
 
-(define (count-negatives description)
-  (if (empty? description)
-      0
-      (if (is-bad (first description) bad-words)
-          (+ 1 (count-negatives (rest description)))
-          (count-negatives (rest description)))))
+; Changed to take just the description for repeated use in multiple functions
+(define (interpret-desc desc)
+  (letrec ([num-word (length desc)]
+           [num-bad
+            (length (filter (lambda (x) (not (equal? (member x bad-words) #f))) desc))]
+           [value (* (* (expt 2 num-bad) num-word) -1)])
+    (if (equal? num-bad 0) num-word value)))
 
-(define (is-bad word lst-bad)
-  (if (empty? lst-bad)
-      #f
-      (if (equal? (first lst-bad) word)
-          #t
-          (is-bad word (rest lst-bad)))))
+(define (interpret-func expr)
+  (if (and (>= (length expr) 3) (equal? (string-join (take expr 3)) call))
+      (list (list-ref expr 3) (interpret-func-expr (drop expr 5)))
+      (interpret-func-expr expr)))
 
+(define (interpret-func-expr expr)
+  (let ([split-add (make-splitter add)]
+        [split-mult (make-splitter mult)])
+    (if (equal? (length expr) 1)
+        (if (equal? (first expr) param)
+            (lambda (x) x)
+            (lambda (x) (interpret-desc expr)))
+        (cond [(not (equal? (split-add expr) #f)) (help-split expr split-add +)]
+              [(not (equal? (split-mult expr) #f)) (help-split expr split-mult *)]
+              [else (lambda (x) (interpret-desc expr))]))))
+
+(define (help-split expr split-f f)
+  (let ([e1 (first (split-f expr))]
+        [e2 (last (split-f expr))])
+    (cond [(and (equal? (length e1) 1) (equal? (first e1) param))
+           (if (and (equal? (length e2) 1) (equal? (first e2) param))
+               (lambda (x) (f x x))
+               (lambda (x) (f x (interpret-desc e2))))]
+          [(and (equal? (length e2) 1) (equal? (first e2) param))
+           (lambda (x) (f x (interpret-desc e1)))]
+          [else (lambda (x) (f (interpret-desc e1) (interpret-desc e2)))])))
+
+(define (interpret-expr expr name plst flst)
+  (if (and (>= (length expr) 3) (equal? (string-join (take expr 3)) call))
+      (call-func (list-ref expr 3) (interpret-expr-expr (drop expr 5) name plst) flst)
+      (interpret-expr-expr expr name plst)))
+
+(define (call-func fname arg flst)
+  (let ([func (last (list-ref flst (search2 fname flst)))])
+    (if (pair? func)
+        (call-func (first func) ((last func) arg) flst)
+        (func arg))))
+
+; Uses check-expr which uses interpret-desc
+(define (interpret-expr-expr expr name plst)
+  (let ([split-add (make-splitter add)]
+        [split-mult (make-splitter mult)])
+    (cond [(not (equal? (split-add expr) #f))
+           (+ (check-expr (first (split-add expr)) name plst)
+              (check-expr (last (split-add expr)) name plst))]
+          [(not (equal? (split-mult expr) #f))
+           (* (check-expr (first (split-mult expr)) name plst)
+              (check-expr (last (split-mult expr)) name plst))]
+          [else (check-expr expr name plst)])))
+
+; Checks for self-reference, name-lookup or neither in an expression
+(define (check-expr expr name plst)
+  (if (equal? (length expr) 1)
+      (cond [(not (equal? (member (first expr) self-refs) #f))
+             (last (list-ref plst (search2 name plst)))]
+            [(not (equal? (member (first expr) (flatten plst)) #f))
+             (last (list-ref plst (search2 (first expr) plst)))]
+            [else (interpret-desc expr)])
+      (interpret-desc expr)))
