@@ -115,7 +115,14 @@ Read through the starter code carefully. In particular, look for:
 ; Main evaluation (YOUR WORK GOES HERE)
 ;------------------------------------------------------------------------------
 
-; (helper) search1 is used in split-body
+#|
+(search1 item lst)
+  item: a string to search for.
+  lst: a list of strings.
+
+  Returns the index of the item in the list lst.
+  If no match is found, returns #f.
+|#
 (define (search1 item lst)
   (let search-ind ([lst lst]
                    [ind 0])
@@ -123,7 +130,14 @@ Read through the starter code carefully. In particular, look for:
           [(equal? item (first lst)) ind]
           [else (search-ind (rest lst) (+ 1 ind))])))
 
-; (helper) search2 is used in check-expr (one level deeper than search1)
+#|
+(search2 item lst)
+  item: a string to search for.
+  lst: a list of pairs in form (str content).
+
+  Returns the index of the pair that contains item at index 0
+  in the list lst. If no match is found, returns #f.
+|#
 (define (search2 item lst)
   (let search-ind ([lst lst]
                    [ind 0])
@@ -131,14 +145,42 @@ Read through the starter code carefully. In particular, look for:
           [(equal? item (first (first lst))) ind]
           [else (search-ind (rest lst) (+ 1 ind))])))
 
-; (helper) split-body is used in evaluate
+#|
+(split-body body)
+  body: a list of lines corresponding to the semantically meaningful text
+        of a FunShake file.
+
+  Returns a list containing three seperate parts of the body,
+  respectively the personae, settings (optional), and dialogue parts.
+|#
 (define (split-body body)
   (define i (search1 finis body))
   (if (equal? i #f)
         (cons body '())
         (cons (take body i) (split-body (drop body (+ i 1))))))
 
-; (helper) sublist is used in make-splitter
+#|
+(sublist sub lst)
+  sub: a list
+  lst: a list
+
+  Checks whether 'sub' is a sublist of 'lst' (i.e., all the items in
+  'sub' appear consecutively in 'lst').
+
+  If 'sub' is a sublist of 'lst', this function returns the *index*
+  of the first element of the first occurrence of 'sub' within 'lst'.
+  Otherwise, this function returns #f.
+
+  Note that the empty list is a sublist of every list, and it first
+  occurs at index 0.
+
+> (sublist '(30 40) '(10 20 30 40 50))
+2
+> (sublist '(20 30) '(10 20 30 20 30 40 50))
+1
+> (sublist '(1 2 3) '(5 4 3 2 1))
+#f
+|#
 (define (sublist sub lst)
   (let sublist-ind ((lst lst)
                     (ind 0))
@@ -147,7 +189,26 @@ Read through the starter code carefully. In particular, look for:
           [(equal? (take lst (length sub)) sub) ind]
           [else (sublist-ind (rest lst) (+ 1 ind))])))
 
-; (helper) make-splitter is used in interpret-expr
+#|
+(make-splitter splitter)
+  splitter: a string
+
+  Returns a function f that takes a string s and implements the following
+  behaviour:
+    1. If 'splitter' is *not* a substring of the 's' list,
+       return #f.
+    2. Else, return a list of two elements (list before after), where
+       'before' is the list of words in 's' *before* the first occurrence
+       of 'splitter', and 'after' is the list of words in 's' *after* the
+       first occurrence of 'splitter'. Note that neither 'before' nor
+       'after' include the words from the first occurrence of 'splitter'.
+
+> (define f (make-splitter "hello world"))
+> (f "this is a hello world kind of party")
+'(("this" "is" "a") ("kind" "of" "party"))
+> (f "this is a hello not world kind of party")
+#f
+|#
 (define (make-splitter splitter)
   (lambda (lst)
     (letrec ([sub (string-split splitter)]
@@ -157,11 +218,9 @@ Read through the starter code carefully. In particular, look for:
 #|
 (evaluate body)
   body: a list of lines corresponding to the semantically meaningful text
-  of a FunShake file.
+        of a FunShake file.
 
   Returns a list of numbers produced when evaluating the FunShake file.
-  This should be the main starting point of your work! Currently,
-  it just outputs the semantically meaningful lines in the file.
 |#
 (define (evaluate body)
   (letrec ([body-lst (split-body body)]
@@ -175,6 +234,13 @@ Read through the starter code carefully. In particular, look for:
     (define dlst (interpret-dialogue-lst dialogue-lst plst flst))
     (map (lambda (item) (last item)) dlst)))
 
+#|
+(interpret-personae-lst lst)
+  lst: a list of lines corresponding to personae part of a FunShake file.
+
+  Returns a list of pairs of identifier names and their value in form
+  ("name" value).
+|#
 (define (interpret-personae-lst lst)
   (if (empty? lst)
       '()
@@ -182,6 +248,14 @@ Read through the starter code carefully. In particular, look for:
         (cons (list (string-trim (first s) ",") (interpret-desc (rest s)))
               (interpret-personae-lst (rest lst))))))
 
+#|
+(interpret-settings-lst lst)
+  lst: a list of lines corresponding to settings part of a FunShake file.
+
+  Returns a list of pairs of function names and their contents in form
+  ("fname" (lambda (x) ...)). If the body of function is another function
+  call, it results in nested pair ("fname" ("fname2" (lambda (x) ...))).
+|#
 (define (interpret-settings-lst lst)
   (if (empty? lst)
       '()
@@ -189,6 +263,13 @@ Read through the starter code carefully. In particular, look for:
         (cons (list (string-trim (first s) ",") (interpret-func (rest s)))
               (interpret-settings-lst (rest lst))))))
 
+#|
+(interpret-dialogue-lst lst)
+  lst: a list of lines corresponding to dialogue part of a FunShake file.
+
+  Returns a list of pairs of speaker names and the evaluation of their
+  dialogue lines in form ("name" value).
+|#
 (define (interpret-dialogue-lst lst plst flst)
   (if (empty? lst)
       '()
@@ -196,7 +277,14 @@ Read through the starter code carefully. In particular, look for:
         (cons (list name (interpret-expr (string-split (second lst)) name plst flst))
               (interpret-dialogue-lst (drop lst 2) plst flst)))))
 
-; Changed to take just the description for repeated use in multiple functions
+#|
+(interpret-desc desc)
+  desc: a list of words in a description.
+
+  Returns an integer value the description evaluates to,
+  by counting the number of words n and number of bad words b
+  and returning (-1) * (2 ^ b) * n. If b = 0, returns just n.
+|#
 (define (interpret-desc desc)
   (letrec ([num-word (length desc)]
            [num-bad
@@ -204,11 +292,26 @@ Read through the starter code carefully. In particular, look for:
            [value (* (* (expt 2 num-bad) num-word) -1)])
     (if (equal? num-bad 0) num-word value)))
 
+#|
+(interpret-func expr)
+  expr: a list of words in a function definition expression.
+
+  Returns a lambda function the function definition evaluates to.
+  Detects possible function call in the body, and recursively evaluates
+  the rest of the definition for use with the function call.
+|#
 (define (interpret-func expr)
   (if (and (>= (length expr) 3) (equal? (string-join (take expr 3)) call))
       (list (list-ref expr 3) (interpret-func-expr (drop expr 5)))
       (interpret-func-expr expr)))
 
+#|
+(interpret-func-expr expr)
+  expr: a list of words in a function definition expression,
+        with possible function call trimmed.
+
+  Returns a lambda function the expression evaluates to.
+|#
 (define (interpret-func-expr expr)
   (let ([split-add (make-splitter add)]
         [split-mult (make-splitter mult)])
@@ -220,6 +323,18 @@ Read through the starter code carefully. In particular, look for:
               [(not (equal? (split-mult expr) #f)) (help-split expr split-mult *)]
               [else (lambda (x) (interpret-desc expr))]))))
 
+#|
+(help-split expr split-f f)
+  expr: a list of words in a function definition expression,
+        that contains either addition or multiplication denoter.
+  split-f: a function that splits a list of strings into two,
+           before and after a certain string occurrence.
+  f: a function that should be operated depending on the denoter.
+
+  Returns a lambda function the expression evaluates to,
+  by splitting the expression by either addition of multiplication
+  denoter and evaluating each end.
+|#
 (define (help-split expr split-f f)
   (let ([e1 (first (split-f expr))]
         [e2 (last (split-f expr))])
@@ -231,18 +346,48 @@ Read through the starter code carefully. In particular, look for:
            (lambda (x) (f x (interpret-desc e1)))]
           [else (lambda (x) (f (interpret-desc e1) (interpret-desc e2)))])))
 
+#|
+(interpret-expr expr name plst flst)
+  expr: a list of words in a dialogue expression.
+  name: the name of the speaker, as a string.
+  plst: a list of identifier names and their value pairs.
+  flst: a list of function names and their contents pairs.
+
+  Returns an interger value the dialogue evaluates to.
+  Detects possible function call, and calls function with the rest of
+  the expression as an argument. Otherwise just evaluates expression.
+|#
 (define (interpret-expr expr name plst flst)
   (if (and (>= (length expr) 3) (equal? (string-join (take expr 3)) call))
       (call-func (list-ref expr 3) (interpret-expr-expr (drop expr 5) name plst) flst)
       (interpret-expr-expr expr name plst)))
 
+#|
+(call-func fname arg flst)
+  fname: the name of the function to be called, as a string.
+  arg: an integer value to be called on the function.
+  flst: a list of function names and their contents pairs.
+
+  Recursively returns the lambda function equivalent of the pair
+  from flst with function name fname.
+|#
 (define (call-func fname arg flst)
   (let ([func (last (list-ref flst (search2 fname flst)))])
     (if (pair? func)
         (call-func (first func) ((last func) arg) flst)
         (func arg))))
 
-; Uses check-expr which uses interpret-desc
+#|
+(interpret-expr-expr expr name plst)
+  expr: a list of words in a dialogue expression,
+        with possible function call trimmed.
+  name: the name of the speaker, as a string.
+  plst: a list of identifier names and their value pairs.
+
+  Returns an interger value the expression evaluates to.
+  Detects any addtion or multiplication denoter and evaluates
+  each end (or the whole expression in case of none).
+|#
 (define (interpret-expr-expr expr name plst)
   (let ([split-add (make-splitter add)]
         [split-mult (make-splitter mult)])
@@ -254,7 +399,17 @@ Read through the starter code carefully. In particular, look for:
               (check-expr (last (split-mult expr)) name plst))]
           [else (check-expr expr name plst)])))
 
-; Checks for self-reference, name-lookup or neither in an expression
+#|
+(check-expr expr name plst)
+  expr: a list of words in a dialogue expression,
+        with possibile addition or multiplication denoter trimmed.
+  name: the name of the speaker, as a string.
+  plst: a list of identifier names and their value pairs.
+
+  Returns an integer value the expression evaluates to,
+  by checking for either self-reference or name-lookup by returning
+  the value equivalent of the pair from plst with identifier name name.
+|#
 (define (check-expr expr name plst)
   (if (equal? (length expr) 1)
       (cond [(not (equal? (member (first expr) self-refs) #f))
